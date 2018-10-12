@@ -142,6 +142,12 @@ function! s:ParseRemotePath(remote_path)
   return [host, port, path]
 endfunction
 
+" Build Rsync command from args
+function! s:SyncCommand(src_path, dest_path)
+  return printf('rsync %s %s', a:src_path, a:dest_path)
+endfunction
+
+
 " Build scp command from args
 function! s:ScpCommand(port, src_path, dest_path)
   let port = empty(a:port) ? '' : '-P ' . a:port
@@ -290,6 +296,14 @@ function! s:ExecuteCommand(type, command, message)
 endfunction
 
 " Overwrite remote file with currently opened file
+function! s:SyncFile(env)
+  let [port, local_file, remote_file] = s:PrepareToCopy(a:env)
+  let command = s:SyncCommand(local_file, remote_file)
+  let message = 'Sync with ' . remote_file
+  call s:ExecuteCommand('MirrorSync', command, message)
+endfunction
+
+" Overwrite remote file with currently opened file
 function! s:PushFile(env)
   let [port, local_file, remote_file] = s:PrepareToCopy(a:env)
   let command = s:ScpCommand(port, local_file, remote_file)
@@ -412,6 +426,8 @@ function! mirror#Do(env, type, command)
       call s:OpenParentDir(env, a:command)
     elseif a:type ==# 'root_dir'
       call s:OpenRootDir(env, a:command)
+    elseif a:type ==# 'sync'
+      call s:SyncFile(env)
     elseif a:type ==# 'push'
       call s:PushFile(env)
     elseif a:type ==# 'pull'
@@ -457,6 +473,8 @@ function! mirror#InitForBuffer(current_project)
   command! -buffer -complete=customlist,s:EnvCompletion -nargs=? MirrorSDiff
         \ call mirror#Do(<q-args>, 'diff', 'split')
 
+  command! -buffer -complete=customlist,s:EnvCompletion -nargs=? MirrorSync
+        \ call mirror#Do(<q-args>, 'sync', '')
   command! -buffer -complete=customlist,s:EnvCompletion -nargs=? MirrorPush
         \ call mirror#Do(<q-args>, 'push', '')
   command! -buffer -complete=customlist,s:EnvCompletion -nargs=? MirrorPull
