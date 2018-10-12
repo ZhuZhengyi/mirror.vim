@@ -144,7 +144,7 @@ endfunction
 
 " Build Rsync command from args
 function! s:SyncCommand(src_path, dest_path)
-  return printf('rsync %s %s', a:src_path, a:dest_path)
+  return printf('rsync -q %s %s', a:src_path, a:dest_path)
 endfunction
 
 
@@ -296,7 +296,15 @@ function! s:ExecuteCommand(type, command, message)
 endfunction
 
 " Overwrite remote file with currently opened file
+function! s:SyncFile2(envs)
+    for env in a:envs
+        call s:SyncFile(env)
+    endfor
+endfunction
+
+" Overwrite remote file with currently opened file
 function! s:SyncFile(env)
+    echo "env " . a:env
   let [port, local_file, remote_file] = s:PrepareToCopy(a:env)
   let command = s:SyncCommand(local_file, remote_file)
   let message = 'Sync with ' . remote_file
@@ -371,6 +379,32 @@ function! s:CurrentMirrors()
 endfunction
 
 " Check selected environment for existence and return it
+function! s:ChooseEnvs(env)
+    let l:envs = []
+  let default_env = s:FindDefaultEnv()
+  if empty(s:CurrentMirrors())
+    echo 'Project' '"' . b:project_with_mirror . '"'
+          \ 'doesn''t have any environments'
+          \ '(' . g:mirror#config_path . ')'
+  elseif empty(a:env) && empty(default_env)
+    return keys(s:CurrentMirrors())
+    "echo 'Can''t find default environment for'
+    "      \ '"' . b:project_with_mirror . '"...'
+  " env is not given - using default env for current project
+  elseif empty(a:env) && !empty(default_env)
+    return [default_env]
+  elseif !empty(a:env)
+    if has_key(s:CurrentMirrors(), a:env)
+      return [a:env]
+    else
+      echo 'Environment with name' '"' . a:env . '"'
+            \ 'not found in project' '"' . b:project_with_mirror . '"'
+            \ '(' . g:mirror#config_path . ')'
+    endif
+  endif
+endfunction
+
+" Check selected environment for existence and return it
 function! s:ChooseEnv(env)
   let default_env = s:FindDefaultEnv()
   if empty(s:CurrentMirrors())
@@ -414,7 +448,15 @@ endfunction
 
 " Do remote action of given type
 function! mirror#Do(env, type, command)
-  let env = s:ChooseEnv(a:env)
+  let envs = s:ChooseEnvs(a:env)
+  for env_ in envs
+      call mirror#Do0(env_, a:type, a:command)
+  endfor
+endfunction
+
+" Do remote action of given type
+function! mirror#Do0(env, type, command)
+    let env = s:ChooseEnv(a:env)
   if !empty(env)
     if a:type ==# 'file'
       call s:OpenFile(env, a:command)
